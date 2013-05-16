@@ -1,3 +1,2 @@
-(load "stack-queue")
-(load "pq")
+(load "heap")
 (load "search")
