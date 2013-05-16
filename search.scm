@@ -2,7 +2,7 @@
 
 (load-option 'hash-table)
 
-
+;; Initializes and starts search
 (define (do-search expr score-derivation score-lt? good-enough)
 	(let ((to-expand (make-heap score-lt?))
 	      (expanded (make-equal-hash-table))
@@ -22,10 +22,10 @@
 (define (search to-expand expanded score prev score-derivation score-lt? good-enough)
 	(let loop ((done #f)
 	           (best-so-far '()))
-		(pp "score")
-		(hash-table-pp score)
-		(pp "prev")
-		(hash-table-pp prev)
+		; (pp "score")
+		; (hash-table-pp score)
+		; (pp "prev")
+		; (hash-table-pp prev)
 		(if (or done (heap-empty? to-expand))
 			(begin
 				(pp "done!")
@@ -90,7 +90,12 @@
 
 
 
-;;;Simple test cases the search infrastructure (without equations)
+
+
+
+
+
+;;; Super basic test cases for the search infrastructure (without equations) - basically just tries to search the integers for 100, starting at 10.
 (define (get-applicable-rules expr)
 	(list -1 1))
 
@@ -99,7 +104,7 @@
 
 ; Summarizes the derived expression
 (define (score-derivation-numeric expr derived-expr prev score)
-	(list (abs (- derived-expr 4)) (length (backtrace derived-expr prev))))
+	(list (abs (- derived-expr 100)) (length (backtrace derived-expr prev))))
 
 ; Determines when to show the user a result
 (define (good-enough-numeric expr prev score)
