@@ -5,9 +5,9 @@
 
 (define (do-search expr score-derivation score-lt? good-enough)
 	(let ((to-expand (make-heap score-lt?))
-	      (expanded (make-eq-hash-table))
-	      (score (make-eq-hash-table))
-	      (prev (make-eq-hash-table)))
+	      (expanded (make-equal-hash-table))
+	      (score (make-equal-hash-table))
+	      (prev (make-equal-hash-table)))
 		(heap-insert to-expand expr 0)
 		(hash-table/put! score expr 0)
 		(search to-expand expanded score prev score-derivation good-enough)))
@@ -68,3 +68,7 @@
 	(= 1 (first (hash-table/get score expr #f))))
 
 ;(do-search expr score-derivation1 score-list-lt? good-enough1)
+
+
+;;;Simple test cases on non-equations
+(define (get-applicable-rules))
