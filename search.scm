@@ -9,25 +9,41 @@
 	      (score (make-equal-hash-table))
 	      (prev (make-equal-hash-table)))
 		(heap-insert! to-expand 0 expr)
-		(hash-table/put! score expr 0)
-		(search to-expand expanded score prev score-derivation good-enough)))
+		(hash-table/put! prev expr #f)
+		(hash-table/put! score expr (score-derivation expr expr prev score))
+		(search to-expand expanded score prev score-derivation score-lt? good-enough)))
 
+(define (hash-table-pp table)
+	(display "==========\n")
+	(hash-table/for-each table (lambda (key val) (display key) (display " : ") (display val) (newline)))
+	(display "==========\n"))
 
 ;; Best-first search
-(define (search to-expand expanded score prev score-derivation good-enough)
-	(let loop ()
-		(pp 1)
-		(if (heap-empty? to-expand)
-			(begin (pp prev) '())
+(define (search to-expand expanded score prev score-derivation score-lt? good-enough)
+	(let loop ((done #f)
+	           (best-so-far '()))
+		(pp "score")
+		(hash-table-pp score)
+		(pp "prev")
+		(hash-table-pp prev)
+		(if (or done (heap-empty? to-expand))
+			(begin
+				(pp "done!")
+				(hash-table-pp prev)
+				(backtrace best-so-far prev))
 			(begin 
 				(let ((expr (heap-pop-min! to-expand)))
-				      (hash-table/put! expanded expr #t)
+					(hash-table/put! expanded expr #t)
 					(if (good-enough expr prev score)
 						(begin
-							(backtrace (list expr '()) prev)
+							(pp "good enough")
+							(set! done #t)
+							(set! best-so-far expr))
+						(let inner-loop ((rules (get-applicable-rules expr)))
 							(if (not (null? rules))
 								(begin
 									(let* ((rule (first rules))
+									       (derived-expr (apply-rule expr rule))
 									       (alt-score (score-derivation expr derived-expr prev score))
 									       (current-score (hash-table/get score derived-expr #f)))
 										(cond
@@ -36,21 +52,23 @@
 												(hash-table/put! score derived-expr alt-score)
 												(if (not (hash-table/get expanded derived-expr #f))
 													(heap-insert! to-expand alt-score derived-expr)))
-											((< alt-score (hash-table/get score derived-expr #f))
+											((score-lt? alt-score (hash-table/get score derived-expr #f))
 												(hash-table/put! prev derived-expr (list expr rule))   ;; Save a tuple of the expression and rule used to get to the derived expression
 												(hash-table/put! score derived-expr alt-score)
 												(if (not (hash-table/get expanded derived-expr #f))
-													(heap-decrease-key! to-expand derived-expr alt-score)))))
+													(heap-decrease-key! to-expand derived-expr alt-score))))
+										(if (score-lt? alt-score (hash-table/get score best-so-far (list 0 0)))
+											(set! best-so-far derived-expr)))
 								(inner-loop (cdr rules)))))))
-				(loop)))))
+				(loop done best-so-far)))))
 
 
 ;; Returns a list of tuples of the form '(expr rule)
 (define (backtrace expr prev)
-	(let ((prev-expr (hash-table/get prev expr #f)))
-		(if (not prev-expr)
-			(list expr)
-			(append (backtrace prev-expr prev) expr))))
+	(let ((prev-expr-rule (hash-table/get prev expr #f)))
+		(if (not prev-expr-rule)
+			(list (cons expr '()))
+			(append (backtrace (first prev-expr-rule) prev) (list (cons expr (second prev-expr-rule)))))))
 
 
 ; Compares summaries of the expressions
@@ -81,11 +99,11 @@
 
 ; Summarizes the derived expression
 (define (score-derivation-numeric expr derived-expr prev score)
-	(list (abs (- expr 4)) (length (backtrace expr prev))))
+	(list (abs (- derived-expr 4)) (length (backtrace derived-expr prev))))
 
 ; Determines when to show the user a result
 (define (good-enough-numeric expr prev score)
-	(= 1 expr))
+	(= 0 (first (hash-table/get score expr (list 1 1)))))
 
 ; (do-search expr score-derivation score-list-lt? good-enough)
 (pp (do-search 10 score-derivation-numeric score-list-lt? good-enough-numeric))
