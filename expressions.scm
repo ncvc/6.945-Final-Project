@@ -1,14 +1,12 @@
 ;arguments are an expression or a list of expressions and the rule 
 (define apply-rule (make-generic-operator 2))
 
-(defhandler apply-rule derivative is-differentiable? derivative?)
+(define (add-applicable-rule expression rule)
+(list (car expression) (cadr expression) (cons rule (caddr expression))))
 
-(define (is-differentiable? expression) #t)
+(define (get-applicable-rules expression)
+(caddr expression))
 
-(define (derivative? rule) (equal? rule 'D))
-
-(define (derivative expression rule)
-  (D expression))
 
 
 
