@@ -2,113 +2,103 @@
 
 (load-option 'hash-table)
 
-;; Initializes and starts search
-(define (do-search expr score-derivation score-lt? good-enough)
-	(let ((to-expand (make-heap score-lt?))
-	      (expanded (make-equal-hash-table))
-	      (score (make-equal-hash-table))
-	      (prev (make-equal-hash-table)))
-		(heap-insert! to-expand 0 expr)
-		(hash-table/put! prev expr #f)
-		(hash-table/put! score expr (score-derivation expr expr prev score))
-		(search to-expand expanded score prev score-derivation score-lt? good-enough)))
-
+;; Helper method to pretty-print a hash table - useful for debugging
 (define (hash-table-pp table)
 	(display "==========\n")
 	(hash-table/for-each table (lambda (key val) (display key) (display " : ") (display val) (newline)))
 	(display "==========\n"))
 
-;; Best-first search
-(define (search to-expand expanded score prev score-derivation score-lt? good-enough)
-	(let loop ((done #f)
-	           (best-so-far '()))
-		; (pp "score")
-		; (hash-table-pp score)
-		; (pp "prev")
-		; (hash-table-pp prev)
-		(if (or done (heap-empty? to-expand))
-			(begin
-				(pp "done!")
-				(hash-table-pp prev)
-				(backtrace best-so-far prev))
-			(begin 
-				(let ((expr (heap-pop-min! to-expand)))
-					(hash-table/put! expanded expr #t)
-					(if (good-enough expr prev score)
-						(begin
-							(pp "good enough")
-							(set! done #t)
-							(set! best-so-far expr))
-						(let inner-loop ((rules (get-applicable-rules expr)))
-							(if (not (null? rules))
-								(begin
-									(let* ((rule (first rules))
-									       (derived-expr (apply-rule expr rule))
-									       (alt-score (score-derivation expr derived-expr prev score))
-									       (current-score (hash-table/get score derived-expr #f)))
-										(cond
-											((not current-score)
-												(hash-table/put! prev derived-expr (list expr rule))   ;; Save a tuple of the expression and rule used to get to the derived expression
-												(hash-table/put! score derived-expr alt-score)
-												(if (not (hash-table/get expanded derived-expr #f))
-													(heap-insert! to-expand alt-score derived-expr)))
-											((score-lt? alt-score (hash-table/get score derived-expr #f))
-												(hash-table/put! prev derived-expr (list expr rule))   ;; Save a tuple of the expression and rule used to get to the derived expression
-												(hash-table/put! score derived-expr alt-score)
-												(if (not (hash-table/get expanded derived-expr #f))
-													(heap-decrease-key! to-expand derived-expr alt-score))))
-										(if (score-lt? alt-score (hash-table/get score best-so-far (list 0 0)))
-											(set! best-so-far derived-expr)))
-								(inner-loop (cdr rules)))))))
-				(loop done best-so-far)))))
+
+;; Initializes and starts search
+(define (search node generate-summary summary-lt? good-enough max-nonimproved-expansions get-neighbors traverse-edge)
+	; Init
+	(let ((to-expand (make-heap summary-lt?))
+	      (expanded (make-equal-hash-table))
+	      (summary (make-equal-hash-table))
+	      (prev (make-equal-hash-table)))
+		(hash-table/put! prev node #f)
+		(let ((init-node-summary (generate-summary node node prev summary)))
+			(hash-table/put! summary node init-node-summary)
+			(heap-insert! to-expand init-node-summary node))
+
+		; Begin search 
+		(let loop ((nonimproved-expansions 0)
+		           (best-so-far node))
+			(display "best-so-far: ")
+			(display best-so-far)
+			(newline)
+			(if (or (> nonimproved-expansions max-nonimproved-expansions) (heap-empty? to-expand))
+				(begin
+					(pp "done!")
+					(hash-table-pp prev)
+					(backtrace best-so-far prev))
+				(begin 
+					(let ((node (heap-pop-min! to-expand)))
+						(hash-table/put! expanded node #t)
+						(if (good-enough node prev summary)
+							(begin
+								(pp "good enough")
+								(set! nonimproved-expansions max-nonimproved-expansions)
+								(set! best-so-far node))
+							(let inner-loop ((edges (get-neighbors node)))
+								(if (not (null? edges))
+									(begin
+										(let* ((edge (first edges))
+										       (new-node (traverse-edge node edge))
+										       (alt-summary (generate-summary node new-node prev summary))
+										       (current-summary (hash-table/get summary new-node #f)))
+											(cond
+												((not current-summary)
+													(hash-table/put! prev new-node (list node edge))   ;; Save a tuple of the node and edge used to get to the new node
+													(hash-table/put! summary new-node alt-summary)
+													(if (not (hash-table/get expanded new-node #f))
+														(heap-insert! to-expand alt-summary new-node)))
+												((summary-lt? alt-summary (hash-table/get summary new-node #f))
+													(hash-table/put! prev new-node (list node edge))   ;; Save a tuple of the node and edge used to get to the new node
+													(hash-table/put! summary new-node alt-summary)
+													(if (not (hash-table/get expanded new-node #f))
+														(heap-decrease-key! to-expand new-node alt-summary))))
+											(if (or (null? best-so-far) (summary-lt? alt-summary (hash-table/get summary best-so-far (list 0 0))))
+												(begin
+													(set! best-so-far new-node)
+													(set! nonimproved-expansions 0))))
+									(inner-loop (cdr edges)))))))
+					(loop (+ nonimproved-expansions 1) best-so-far))))))
 
 
-;; Returns a list of tuples of the form '(expr rule)
-(define (backtrace expr prev)
-	(let ((prev-expr-rule (hash-table/get prev expr #f)))
-		(if (not prev-expr-rule)
-			(list (cons expr '()))
-			(append (backtrace (first prev-expr-rule) prev) (list (cons expr (second prev-expr-rule)))))))
+;; Returns a list of tuples of the form '(node edge)
+(define (backtrace node prev)
+	(let ((prev-node-edge (hash-table/get prev node #f)))
+		(if (not prev-node-edge)
+			(list (cons node '()))
+			(append (backtrace (first prev-node-edge) prev) (list (cons node (second prev-node-edge)))))))
 
 
-; Compares summaries of the expressions
-(define (score-list-lt? score1 score2)
-	(define (score-lt-helper s1 s2)
+
+; Useful helper function that compares summaries in the form of a list of numbers, where the first elements of the lists that differ arer compared numerically
+(define (summary-list-lt? summary1 summary2)
+	(define (summary-lt-helper s1 s2)
 		(if (and (= (first s1) (first s2)) (pair? (cdr s1)))
-			(score-lt-helper (cdr s1) (cdr s2))
+			(summary-lt-helper (cdr s1) (cdr s2))
 			(< (first s1) (first s2))))
-	(score-lt-helper score1 score2))
-
-
-; Summarizes the derived expression
-(define (score-derivation1 expr derived-expr prev score)
-	(list (num-terms derived-expr) (length (backtrace expr prev)) (operator-complexity derived-expr)))
-
-; Determines when to show the user a result
-(define (good-enough1 expr prev score)
-	(= 1 (first (hash-table/get score expr #f))))
-
-
-
-
-
+	(summary-lt-helper summary1 summary2))
 
 
 
 ;;; Super basic test cases for the search infrastructure (without equations) - basically just tries to search the integers for 100, starting at 10.
-(define (get-applicable-rules expr)
+(define (get-applicable-edges node)
 	(list -1 1))
 
-(define (apply-rule expr rule)
-	(+ expr rule))
+(define (apply-edge node edge)
+	(+ node edge))
 
-; Summarizes the derived expression
-(define (score-derivation-numeric expr derived-expr prev score)
-	(list (abs (- derived-expr 100)) (length (backtrace derived-expr prev))))
+; Summarizes the new node
+(define (generate-summary-numeric node new-node prev summary)
+	(list (abs (- new-node 100)) (length (backtrace new-node prev))))
 
 ; Determines when to show the user a result
-(define (good-enough-numeric expr prev score)
-	(= 0 (first (hash-table/get score expr (list 1 1)))))
+(define (good-enough-numeric node prev summary)
+	(= 0 (first (hash-table/get summary node (list 1 1)))))
 
-; (do-search expr score-derivation score-list-lt? good-enough)
-(pp (do-search 10 score-derivation-numeric score-list-lt? good-enough-numeric))
+; (do-search node generate-summary summary-list-lt? good-enough)
+(pp (search 10 generate-summary-numeric summary-list-lt? good-enough-numeric 10 get-applicable-edges apply-edge))

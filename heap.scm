@@ -1,3 +1,5 @@
+;; A simple heap implementation, using a weight-balanced tree as the main backing and a hash table for value->key lookup
+
 (load-option 'wt-tree)
 (load-option 'hash-table)
 
@@ -53,7 +55,7 @@
     (heap-insert! heap new-key value)))
 
 
-; Testing
+; Basic Testing Code
 ; (define a (make-heap <))
 ; (heap-insert! a 10 "lol10")
 ; (heap-insert! a 14 "lol14-2")
