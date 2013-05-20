@@ -84,7 +84,7 @@
 	(summary-lt-helper summary1 summary2))
 
 
-
+#|
 ;;; Super basic test cases for the search infrastructure (without equations) - basically just tries to search the integers for 100, starting at 10.
 (define (get-applicable-edges node)
 	(list -1 1))
@@ -102,3 +102,4 @@
 
 ; (do-search node generate-summary summary-list-lt? good-enough)
 (pp (search 10 generate-summary-numeric summary-list-lt? good-enough-numeric 10 get-applicable-edges apply-edge))
+|#
