@@ -9,10 +9,11 @@
       (cons-stream (stream-car s1)
                    (stream-append (stream-cdr s1) s2))))
 
-(define (stream-collapse stream)
+(define (stream-collapse stream #!optional stream-combinator)
+  (set-default-value! stream-combinator stream-append)
   (if (stream-null? stream)
       stream
-      (stream-append (stream-car stream) (stream-collapse (stream-cdr stream)))))
+      (stream-combinator (stream-car stream) (stream-collapse (stream-cdr stream)))))
 
 (define (stream-interleave s1 s2)
   (if (stream-null? s1) s2
@@ -32,23 +33,37 @@
 (define (make-stream-interface stream #!optional length)
   (set-default-value! length #f)
   (let ((input-stream stream)
-        (index 0))
+        (index 0)
+        (stream-store '()))
     (let ((remaining-stream input-stream))
+      (define (reset)
+        (set! index 0)
+        (set! remaining-stream input-stream))
+      (define (store-stream key)
+        (set! stream-store (cons (list key index) stream-store)))
+      (define (restore-stream key)
+        (let ((i (cadr (assoc key stream-store))))
+          (set! index i)
+          (set! remaining-stream (stream-tail input-stream index))))
       (define (stream-interface message)
         (case message
           ((next pop)
-           (if (stream-null? remaining-stream)
-               (begin
-                 (set! index 0)
-                 (set! remaining-stream input-stream)))
+           (if (stream-null? remaining-stream) (reset))
            (let ((next-val (stream-car remaining-stream)))
              (set! remaining-stream (stream-cdr remaining-stream))
              (set! index (+ 1 index))
              next-val))
+          ('reset (reset))
           ((list all)
            (stream->list input-stream))
           ('random
            (stream-ref input-stream (random (or length (+ index 300)))))
+          ((store save)
+           (lambda (key)
+             (store-stream key)))
+          ('restore
+           (lambda (key)
+             (restore-stream key)))
           (else
            (cond
             ((number? message)

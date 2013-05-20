@@ -7,6 +7,8 @@
 
 (define (always x) (lambda () x))
 
+(define (id x) x)
+
 (define-syntax set-default-value!
   (syntax-rules ()
     ((_ var default)

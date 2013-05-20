@@ -118,11 +118,11 @@
   (- (helper n) 1))
 
 (define (select-items selection items)
-  (filter identity
+  (filter id
           (map (lambda (x y) (if (= y 1) x #f))
                items selection)))
 
-(define (make-combinator-stream n)
+(define (make-term-generator-stream n)
   (stream-map
    (lambda (selection)
      (let ((nselected (count (lambda (x) (= x 1)) selection)))
@@ -144,7 +144,7 @@
                 (list->stream *combinator-functions*)
                 (make-exponential-stream))))
 
-;; Hack, not a good way of doing this
+;; Hack, not a complete way of doing this
 (define (combinator-functions-stream arity #!optional combinator-functions)
   (set-default-value! combinator-functions *combinator-functions*)
   (list->stream combinator-functions))
